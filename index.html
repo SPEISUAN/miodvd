@@ -1,0 +1,280 @@
+
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#151923">
+  <meta name="description" content="La mia videoteca personale">
+  <title>miodvd</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #151923;
+      --panel: #202633;
+      --text: #f5f6fa;
+      --muted: #aab3c5;
+      --accent: #e9ad50;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px system-ui, sans-serif;
+    }
+    header { padding: 24px 18px 12px; }
+    h1 { margin: 0; font-size: 30px; }
+    header p { color: var(--muted); margin: 5px 0 18px; }
+    nav { display: flex; gap: 8px; flex-wrap: wrap; }
+    button, input {
+      font: inherit;
+      border-radius: 10px;
+      padding: 11px 13px;
+    }
+    button {
+      cursor: pointer;
+      border: 0;
+      background: var(--panel);
+      color: var(--text);
+    }
+    button.active, button.primary {
+      background: var(--accent);
+      color: #20180c;
+    }
+    main { padding: 12px 18px 36px; }
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      margin: 8px 0 18px;
+    }
+    input {
+      width: 100%;
+      min-width: 0;
+      background: var(--panel);
+      border: 1px solid #394152;
+      color: var(--text);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .movie {
+      min-width: 0;
+      background: var(--panel);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .poster {
+      width: 100%;
+      aspect-ratio: 2 / 3;
+      object-fit: cover;
+      display: block;
+      background: #303746;
+    }
+    .movie-info { padding: 10px; }
+    .movie h2 { font-size: 15px; margin: 0 0 5px; }
+    .movie p { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
+    .actions { display: flex; gap: 6px; }
+    .actions button { padding: 8px; font-size: 13px; }
+    .empty {
+      color: var(--muted);
+      text-align: center;
+      padding: 38px 12px;
+      grid-column: 1 / -1;
+    }
+    .section { display: none; }
+    .section.visible { display: block; }
+    dialog {
+      width: min(440px, calc(100% - 28px));
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid #394152;
+      border-radius: 16px;
+      padding: 20px;
+    }
+    dialog::backdrop { background: #000b; }
+    dialog form { display: grid; gap: 12px; }
+    dialog h2 { margin: 0; }
+    .form-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .note { color: var(--muted); font-size: 13px; line-height: 1.5; }
+    @media (min-width: 650px) {
+      .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      main, header { max-width: 1100px; margin-inline: auto; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🎬 miodvd</h1>
+    <p>La mia collezione di film</p>
+    <nav>
+      <button class="active" data-tab="library">La mia videoteca</button>
+      <button data-tab="cinema">Cinema Goldoni</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="library" class="section visible">
+      <div class="toolbar">
+        <input id="search" type="search" placeholder="Cerca un film…" aria-label="Cerca un film">
+        <button class="primary" id="add">+ Aggiungi</button>
+      </div>
+      <div id="grid" class="grid"></div>
+      <p class="note">Versione iniziale: i dati sono salvati solo in questo browser. Il collegamento a Google Drive sarà configurato in seguito.</p>
+    </section>
+
+    <section id="cinema" class="section">
+      <h2>Cinema Goldoni · Viareggio</h2>
+      <p>La sezione dedicata alla programmazione del cinema sarà collegata in una fase successiva.</p>
+      <p class="note">Gli orari e i nuovi film verranno mostrati dopo aver configurato una fonte affidabile e il controllo automatico.</p>
+    </section>
+  </main>
+
+  <dialog id="editor">
+    <form id="movieForm">
+      <h2 id="formTitle">Nuovo DVD</h2>
+      <input type="hidden" id="movieId">
+      <label>Titolo
+        <input id="title" required maxlength="150" placeholder="Titolo del film">
+      </label>
+      <label>Anno
+        <input id="year" type="number" min="1888" max="2100" placeholder="2025">
+      </label>
+      <label>Regista
+        <input id="director" maxlength="150" placeholder="Nome del regista">
+      </label>
+      <label>Genere
+        <input id="genre" maxlength="100" placeholder="Drammatico, commedia…">
+      </label>
+      <label>URL della copertina
+        <input id="poster" type="url" placeholder="https://…">
+      </label>
+      <p class="note">Usa un indirizzo di immagine affidabile. La ricerca automatica delle locandine verrà aggiunta successivamente.</p>
+      <div class="form-actions">
+        <button type="button" id="cancel">Annulla</button>
+        <button type="submit" class="primary">Salva</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+    const STORAGE_KEY = "miodvd-demo-v1";
+    const $ = id => document.getElementById(id);
+    const placeholder = "data:image/svg+xml," + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="600"><rect width="100%" height="100%" fill="#303746"/><text x="50%" y="48%" fill="#e9ad50" font-size="44" text-anchor="middle">miodvd</text><text x="50%" y="57%" fill="#aab3c5" font-size="20" text-anchor="middle">Copertina</text></svg>'
+    );
+
+    let movies = [];
+    try {
+      movies = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+      if (!Array.isArray(movies)) movies = [];
+    } catch { movies = []; }
+
+    function save() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(movies));
+      render();
+    }
+
+    function render() {
+      const query = $("search").value.trim().toLocaleLowerCase("it");
+      const list = movies
+        .filter(m => m.title.toLocaleLowerCase("it").includes(query))
+        .sort((a, b) => a.title.localeCompare(b.title, "it", {sensitivity:"base"}));
+
+      $("grid").replaceChildren();
+      if (!list.length) {
+        const message = document.createElement("div");
+        message.className = "empty";
+        message.textContent = movies.length
+          ? "Nessun film corrisponde alla ricerca."
+          : "La tua videoteca è vuota. Premi «+ Aggiungi» per inserire il primo DVD.";
+        $("grid").append(message);
+        return;
+      }
+
+      for (const movie of list) {
+        const card = document.createElement("article");
+        card.className = "movie";
+        const img = document.createElement("img");
+        img.className = "poster";
+        img.alt = "Copertina di " + movie.title;
+        img.loading = "lazy";
+        img.src = movie.poster || placeholder;
+        img.onerror = () => { img.onerror = null; img.src = placeholder; };
+
+        const info = document.createElement("div");
+        info.className = "movie-info";
+        const title = document.createElement("h2");
+        title.textContent = movie.title;
+        const detail = document.createElement("p");
+        detail.textContent = [movie.year, movie.director, movie.genre].filter(Boolean).join(" · ") || "Dettagli non inseriti";
+
+        const actions = document.createElement("div");
+        actions.className = "actions";
+        const edit = document.createElement("button");
+        edit.textContent = "Modifica";
+        edit.addEventListener("click", () => openEditor(movie.id));
+        const remove = document.createElement("button");
+        remove.textContent = "Elimina";
+        remove.addEventListener("click", () => {
+          if (confirm("Vuoi eliminare «" + movie.title + "» dalla videoteca?")) {
+            movies = movies.filter(m => m.id !== movie.id);
+            save();
+          }
+        });
+
+        actions.append(edit, remove);
+        info.append(title, detail, actions);
+        card.append(img, info);
+        $("grid").append(card);
+      }
+    }
+
+    function openEditor(id = "") {
+      const movie = movies.find(m => m.id === id);
+      $("movieForm").reset();
+      $("movieId").value = movie?.id || "";
+      $("formTitle").textContent = movie ? "Modifica DVD" : "Nuovo DVD";
+      $("title").value = movie?.title || "";
+      $("year").value = movie?.year || "";
+      $("director").value = movie?.director || "";
+      $("genre").value = movie?.genre || "";
+      $("poster").value = movie?.poster || "";
+      $("editor").showModal();
+    }
+
+    $("add").addEventListener("click", () => openEditor());
+    $("cancel").addEventListener("click", () => $("editor").close());
+    $("search").addEventListener("input", render);
+
+    $("movieForm").addEventListener("submit", event => {
+      event.preventDefault();
+      const id = $("movieId").value || crypto.randomUUID();
+      const movie = {
+        id,
+        title: $("title").value.trim(),
+        year: $("year").value,
+        director: $("director").value.trim(),
+        genre: $("genre").value.trim(),
+        poster: $("poster").value.trim()
+      };
+      const index = movies.findIndex(m => m.id === id);
+      if (index >= 0) movies[index] = movie;
+      else movies.push(movie);
+      save();
+      $("editor").close();
+    });
+
+    document.querySelectorAll("[data-tab]").forEach(button => {
+      button.addEventListener("click", () => {
+        document.querySelectorAll("[data-tab]").forEach(b => b.classList.toggle("active", b === button));
+        document.querySelectorAll(".section").forEach(s => s.classList.toggle("visible", s.id === button.dataset.tab));
+      });
+    });
+
+    render();
+  </script>
+</body>
+</html>
